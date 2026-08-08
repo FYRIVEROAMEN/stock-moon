@@ -52,6 +52,16 @@ function Dashboard({ onLogout }) {
     }
   }, [fetchProductos])
 
+  const [scrolled, setScrolled] = useState(false)
+
+useEffect(() => {
+  const handleScroll = () => {
+    setScrolled(window.scrollY > 50)
+  }
+  window.addEventListener('scroll', handleScroll)
+  return () => window.removeEventListener('scroll', handleScroll)
+}, [])
+
   const handleDelete = async (id) => {
   const result = await Swal.fire({
     title: '¿Desactivar producto?',
@@ -172,17 +182,26 @@ function Dashboard({ onLogout }) {
 
   return (
     <div className="min-h-screen pb-32 md:pb-8">
-      {/* HEADER COMPACTO */}
-      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
-          <h1 className="text-lg md:text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Package className="w-6 h-6 md:w-8 md:h-8 text-blue-600" /> Stock Mercadería
-          </h1>
-          <button onClick={onLogout} className="btn btn-secondary touch-target">
-            <LogOut className="w-5 h-5" /> <span className="hidden sm:inline">Salir</span>
-          </button>
-        </div>
-      </header>
+      {/* HEADER COMPACTO CON STOCKFLOW - Reemplazá SOLO esto */}
+        <header className={`bg-white shadow-sm border-b sticky top-0 z-40 transition-all duration-200 ${
+          scrolled ? 'py-1.5' : 'py-3'
+        }`}>
+          <div className="max-w-7xl mx-auto px-4 flex justify-between items-center">
+            <h1 className="text-lg md:text-xl font-bold text-gray-800 flex items-center gap-2">
+              <div className={`bg-blue-600 rounded-lg flex items-center justify-center transition-all ${
+                scrolled ? 'w-7 h-7' : 'w-8 h-8'
+              }`}>
+                <Package className="w-4 h-4 md:w-5 md:h-5 text-white" />
+              </div>
+            <span className="text-lg md:text-xl font-bold">
+              Stock<span className="text-blue-600">Flow</span>
+            </span>
+            </h1>
+            <button onClick={onLogout} className="btn btn-secondary touch-target">
+              <LogOut className="w-5 h-5" /> <span className="hidden sm:inline">Salir</span>
+            </button>
+          </div>
+        </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="top-tabs">
@@ -236,10 +255,10 @@ function Dashboard({ onLogout }) {
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
                   >
                     <div>
-                      <p className="text-xs text-indigo-700 font-medium">Total Items</p>
+                      <p className="text-xs text-indigo-700 font-medium">Mis Productos</p>
                       <p className="text-3xl font-bold text-indigo-900 mt-1">{totalProductos}</p>
                     </div>
-                    <p className="text-[10px] text-indigo-600">productos activos</p>
+                    <p className="text-[12px] text-indigo-600">Productos activos</p>
                   </button>
 
                   {/* Card 2: Stock Total -> Va a Inventario */}
@@ -251,53 +270,63 @@ function Dashboard({ onLogout }) {
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
                   >
                     <div>
-                      <p className="text-xs text-blue-700 font-medium">Stock Total</p>
+                      <p className="text-xs text-blue-700 font-medium">Stock Disponible</p>
                       <p className="text-3xl font-bold text-blue-600 mt-1">{totalStock}</p>
                     </div>
-                    <p className="text-[10px] text-blue-600">unidades en inventario</p>
+                    <p className="text-[12px] text-blue-600">unidades en inventario</p>
                   </button>
 
-                  {/* Card 3: Alertas de Stock -> Va a Inventario */}
-                  <button
-                    onClick={() => {
-                      setCurrentView('dashboard');
-                      if (stockBajo > 0) setTimeout(() => scrollToProductos(), 100);
-                    }}
-                    className={`shrink-0 w-[70vw] h-[140px] p-3 rounded-2xl border flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer ${
-                      stockBajo > 0 
-                        ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200' 
-                        : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
-                    }`}
-                  >
-                    <p className={`text-xs font-bold flex items-center gap-1 ${
-                      stockBajo > 0 ? 'text-red-700' : 'text-green-700'
-                    }`}>
-                      <AlertTriangle className="w-3 h-3" /> Alertas de Stock
-                      {stockBajo > 0 && <span className="ml-1">({stockBajo})</span>}
-                    </p>
-                    
-                    {stockBajo > 0 ? (
-                      <div className="mt-2 flex-1 overflow-y-auto space-y-1 pr-1">
-                        {productosEnRiesgo.slice(0, 5).map(p => (
-                          <div key={p.id} className="flex justify-between items-center text-[10px] leading-tight">
-                            <span className="truncate flex-1 text-red-800 font-medium">{p.nombre}</span>
-                            <span className="font-bold text-red-600 ml-1 text-[9px] whitespace-nowrap">
-                              {p.stock}{p.stock === 1 ? 'ud' : 'uds'}
-                            </span>
-                          </div>
-                        ))}
-                        {productosEnRiesgo.length > 5 && (
-                          <p className="text-red-600 text-[9px] font-semibold text-center mt-1">
-                            +{productosEnRiesgo.length - 5} más...
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center">
-                        <p className="text-xs text-green-700 font-medium">Todo en orden</p>
-                      </div>
-                    )}
-                  </button>
+                  
+{/* Card 3: Alertas de Stock */}
+<button
+  onClick={() => {
+    setCurrentView('dashboard');
+    if (stockBajo > 0) setTimeout(() => scrollToProductos(), 100);
+  }}
+  className={`shrink-0 w-[70vw] h-[140px] p-3 rounded-2xl border flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer ${
+    stockBajo > 0 
+      ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200' 
+      : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
+  }`}
+>
+  <div className="flex items-center justify-between">
+    <p className={`text-sm font-bold flex items-center gap-1 ${
+      stockBajo > 0 ? 'text-red-800' : 'text-green-800'
+    }`}>
+      <AlertTriangle className={`w-3.5 h-3.5 ${stockBajo > 0 ? 'animate-pulse' : ''}`} /> 
+      {stockBajo > 0 ? 'Alertas' : 'Stock OK'}
+    </p>
+    {stockBajo > 0 && (
+      <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full animate-pulse">
+        ¡Atención!
+      </span>
+    )}
+  </div>
+  
+  {stockBajo > 0 ? (
+    <div className="mt-2 flex-1 overflow-y-auto pr-1 space-y-1">
+      {productosEnRiesgo.slice(0, 3).map(p => (
+        <div key={p.id} className="flex justify-between items-center">
+          <span className="text-[11px] font-semibold text-red-900 truncate pr-2">
+            {p.nombre}
+          </span>
+          <span className="text-[10px] font-bold text-red-700 whitespace-nowrap">
+            {p.stock} unid.
+          </span>
+        </div>
+      ))}
+      {productosEnRiesgo.length > 3 && (
+        <p className="text-red-600 text-[9px] font-semibold text-center mt-1">
+          +{productosEnRiesgo.length - 3} productos más
+        </p>
+      )}
+    </div>
+  ) : (
+    <div className="mt-2 flex-1 flex items-center justify-center">
+      <p className="text-sm text-green-800 font-medium">Todo en orden</p>
+    </div>
+  )}
+</button>
 
                   {/* DUPLICADO PARA SCROLL INFINITO */}
                   <button
@@ -305,7 +334,7 @@ function Dashboard({ onLogout }) {
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
                   >
                     <div>
-                      <p className="text-xs text-indigo-700 font-medium">Total Items</p>
+                      <p className="text-xs text-indigo-700 font-medium">Mis Productos</p>
                       <p className="text-3xl font-bold text-indigo-900 mt-1">{totalProductos}</p>
                     </div>
                     <p className="text-[10px] text-indigo-600">productos activos</p>
@@ -319,7 +348,7 @@ function Dashboard({ onLogout }) {
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
                   >
                     <div>
-                      <p className="text-xs text-blue-700 font-medium">Stock Total</p>
+                      <p className="text-xs text-blue-700 font-medium">Stock Disponible</p>
                       <p className="text-3xl font-bold text-blue-600 mt-1">{totalStock}</p>
                     </div>
                     <p className="text-[10px] text-blue-600">unidades en inventario</p>
@@ -371,11 +400,11 @@ function Dashboard({ onLogout }) {
               {/* DESKTOP - Grid estático */}
               <div className="hidden sm:grid sm:grid-cols-3 gap-4">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-lg text-gray-600 font-medium">Total Productos</p>
+                  <p className="text-lg text-gray-600 font-medium">Mis Productos</p>
                   <p className="text-4xl font-bold text-gray-800 mt-2">{totalProductos}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                  <p className="text-lg text-gray-600 font-medium">Stock Total</p>
+                  <p className="text-lg text-gray-600 font-medium">Stock Disponible</p>
                   <p className="text-4xl font-bold text-blue-600 mt-2">{totalStock}</p>
                 </div>
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -426,14 +455,16 @@ function Dashboard({ onLogout }) {
 
             {/* BARRA DE BÚSQUEDA Y BOTÓN AGREGAR */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <div className="relative flex-1 max-w-md w-full">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
+              <div className="relative flex-1 max-w-md w-full group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-600 transition-colors duration-200" />
                 <input
                   type="text"
-                  placeholder="Buscar por nombre, categoría o color..."
+                  placeholder="Buscar producto..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-11 pr-4 py-2.5 border-2 border-gray-300 rounded-xl text-base bg-white
+                            focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 
+                            hover:border-gray-400 transition-all duration-200"
                 />
               </div>
               <button
