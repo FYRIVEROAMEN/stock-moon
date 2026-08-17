@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Package, Plus, Edit2, Trash2, LogOut, Search, AlertTriangle, ShoppingCart, BarChart3, RotateCcw, ChevronUp } from 'lucide-react'
-import { getProductosActivos, deactivateProducto, reactivateProducto, getProductosInactivos } from '../services/api'
+// ✅ NUEVO: agregado Globe
+import { Package, Plus, Edit2, Trash2, LogOut, Search, AlertTriangle, ShoppingCart, BarChart3, RotateCcw, ChevronUp, Globe, DollarSign } from 'lucide-react'
+// ✅ NUEVO: agregado enviarAWeb, quitarDeWeb
+import { getProductosActivos, deactivateProducto, reactivateProducto, getProductosInactivos, enviarAWeb, quitarDeWeb } from '../services/api'
+
+
+
 import ProductForm from './ProductForm'
 import SalesForm from './SalesForm'
 import SalesHistory from './SalesHistory'
@@ -8,13 +13,7 @@ import Tutorial from './Tutorial'
 import Swal from 'sweetalert2'
 import MetricsView from './MetricsView'
 import ClientesView from './ClientesView'
-
-// ✅ FUNCIÓN UTILITARIA PARA OPTIMIZAR IMÁGENES DE CLOUDINARY
-const optimizeImage = (url, width = 800) => {
-  if (!url) return ''
-  // Inserta transformaciones después de "/upload/"
-  return url.replace('/upload/', `/upload/w_${width},f_auto,q_auto,dpr_auto/`)
-}
+import GastosView from './GastosView'
 
 function Dashboard({ onLogout }) {
   const [productos, setProductos] = useState([])
@@ -30,9 +29,8 @@ function Dashboard({ onLogout }) {
   const [cart, setCart] = useState([])
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [selectedImage, setSelectedImage] = useState(null)
-  
-  // Paginación "Ver más"
   const [cantidadVisible, setCantidadVisible] = useState(12)
+  const [showScrollTop, setShowScrollTop] = useState(false)
   const PASO = 12
 
   const fetchProductos = useCallback(async () => {
@@ -64,24 +62,23 @@ function Dashboard({ onLogout }) {
   }, [fetchProductos])
 
   const [scrolled, setScrolled] = useState(false)
-  const [showScrollTop, setShowScrollTop] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50)
-      setShowScrollTop(window.scrollY > 300)
+      setShowScrollTop(window.scrollY > 400)
     }
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
   useEffect(() => {
     setCantidadVisible(PASO)
   }, [search])
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleDelete = async (id) => {
     const result = await Swal.fire({
@@ -141,6 +138,49 @@ function Dashboard({ onLogout }) {
         icon: 'error',
         confirmButtonColor: '#dc2626'
       })
+    }
+  }
+
+  // ✅ NUEVO: Lógica del botón web
+  const getWebButtonStyle = (estado) => {
+    switch (estado) {
+      case 'publicado': return { cls: 'bg-green-100 text-green-700 hover:bg-green-200', title: '🌐 Publicado — click para quitar de la web' }
+      case 'pendiente': return { cls: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200', title: '⏳ Pendiente — click para cancelar el envío' }
+      case 'rechazado': return { cls: 'bg-red-100 text-red-700 hover:bg-red-200', title: '❌ Rechazado — click para reenviar' }
+      default: return { cls: 'bg-gray-100 text-gray-400 hover:bg-blue-100 hover:text-blue-600', title: '🌐 Enviar a la web' }
+    }
+  }
+
+  const handleWebToggle = async (producto) => {
+    const estado = producto.web_estado || 'no_enviado'
+    const esEnvio = estado === 'no_enviado' || estado === 'rechazado'
+
+    const result = await Swal.fire({
+      title: esEnvio
+        ? (estado === 'rechazado' ? '¿Reenviar a la web?' : '¿Enviar a la web?')
+        : (estado === 'publicado' ? '¿Quitar de la web?' : '¿Cancelar el envío?'),
+      text: esEnvio
+        ? 'Quedará pendiente de aprobación del dueño'
+        : 'Dejará de verse (o de estar pendiente) en el catálogo online',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: esEnvio ? 'Sí, enviar' : 'Sí, quitar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: esEnvio ? '#2563eb' : '#dc2626'
+    })
+
+    if (result.isConfirmed) {
+      try {
+        if (esEnvio) await enviarAWeb(producto.id)
+        else await quitarDeWeb(producto.id)
+        Swal.fire({
+          title: esEnvio ? '🌐 Enviado a la web' : 'Quitado de la web',
+          icon: 'success', timer: 1500, showConfirmButton: false
+        })
+        fetchProductos()
+      } catch (err) {
+        Swal.fire({ title: 'Error', text: err.message, icon: 'error' })
+      }
     }
   }
 
@@ -205,7 +245,6 @@ function Dashboard({ onLogout }) {
 
   return (
     <div className="min-h-screen pb-32 md:pb-8">
-      {/* HEADER COMPACTO CON STOCKFLOW */}
       <header className={`bg-white shadow-sm border-b sticky top-0 z-40 transition-all duration-200 ${
         scrolled ? 'py-1.5' : 'py-3'
       }`}>
@@ -214,7 +253,7 @@ function Dashboard({ onLogout }) {
             <div className={`bg-blue-600 rounded-lg flex items-center justify-center transition-all ${
               scrolled ? 'w-7 h-7' : 'w-8 h-8'
             }`}>
-              <Package className="w-4 h-4 md:w-5 h-5 text-white" />
+              <Package className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
             <span className="text-lg md:text-xl font-bold">
               Stock<span className="text-blue-600">Flow</span>
@@ -247,30 +286,29 @@ function Dashboard({ onLogout }) {
           </button>
           <button onClick={() => setCurrentView('clientes')} className={`tab-btn ${currentView === 'clientes' ? 'active' : ''}`}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
             Clientes
           </button>
           <button onClick={() => setCurrentView('metrics')} className={`tab-btn ${currentView === 'metrics' ? 'active' : ''}`}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a-2 2 0 01-2 2h-2a-2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
             Métricas
+          </button>
+          <button onClick={() => setCurrentView('gastos')} className={`tab-btn ${currentView === 'gastos' ? 'active' : ''}`}>
+            <DollarSign className="w-6 h-6" /> Gastos
           </button>
         </div>
 
         {currentView === 'dashboard' ? (
           <>
-            {/* STATS: Cards compactas (mobile) / Grid (desktop) */}
             <div className="mb-6">
-              {/* MOBILE - Carrusel MANUAL */}
               <div 
                 className="sm:hidden overflow-x-auto -mx-4 px-4"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 <div className="flex gap-3 pb-2" style={{ width: 'max-content' }}>
-                  
-                  {/* Card 1: Total Items */}
                   <button
                     onClick={() => setCurrentView('metrics')}
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
@@ -282,7 +320,6 @@ function Dashboard({ onLogout }) {
                     <p className="text-[12px] text-indigo-600">Productos activos</p>
                   </button>
 
-                  {/* Card 2: Stock Total */}
                   <button
                     onClick={() => {
                       setCurrentView('dashboard');
@@ -291,13 +328,12 @@ function Dashboard({ onLogout }) {
                     className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
                   >
                     <div>
-                      <p className="text-blue-700 text-xs font-medium">Stock Disponible</p>
+                      <p className="text-xs text-blue-700 font-medium">Stock Disponible</p>
                       <p className="text-3xl font-bold text-blue-600 mt-1">{totalStock}</p>
                     </div>
                     <p className="text-[12px] text-blue-600">unidades en inventario</p>
                   </button>
 
-                  {/* Card 3: Alertas de Stock */}
                   <button
                     onClick={() => {
                       setCurrentView('dashboard');
@@ -347,77 +383,9 @@ function Dashboard({ onLogout }) {
                       </div>
                     )}
                   </button>
-
-                  {/* DUPLICADO PARA SCROLL INFINITO */}
-                  <button
-                    onClick={() => setCurrentView('metrics')}
-                    className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-2xl border border-indigo-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
-                  >
-                    <div>
-                      <p className="text-xs text-indigo-700 font-medium">Mis Productos</p>
-                      <p className="text-3xl font-bold text-indigo-900 mt-1">{totalProductos}</p>
-                    </div>
-                    <p className="text-[10px] text-indigo-600">productos activos</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setCurrentView('dashboard');
-                      setTimeout(() => scrollToProductos(), 100);
-                    }}
-                    className="shrink-0 w-[70vw] h-[140px] p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200 flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer"
-                  >
-                    <div>
-                      <p className="text-xs text-blue-700 font-medium">Stock Disponible</p>
-                      <p className="text-3xl font-bold text-blue-600 mt-1">{totalStock}</p>
-                    </div>
-                    <p className="text-[10px] text-blue-600">unidades en inventario</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setCurrentView('dashboard');
-                      if (stockBajo > 0) setTimeout(() => scrollToProductos(), 100);
-                    }}
-                    className={`shrink-0 w-[70vw] h-[140px] p-3 rounded-2xl border flex flex-col justify-between hover:shadow-md transition-all duration-200 active:scale-95 cursor-pointer ${
-                      stockBajo > 0 
-                        ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-200' 
-                        : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
-                    }`}
-                  >
-                    <p className={`text-xs font-bold flex items-center gap-1 ${
-                      stockBajo > 0 ? 'text-red-700' : 'text-green-700'
-                    }`}>
-                      <AlertTriangle className="w-3 h-3" /> Alertas de Stock
-                      {stockBajo > 0 && <span className="ml-1">({stockBajo})</span>}
-                    </p>
-                    
-                    {stockBajo > 0 ? (
-                      <div className="mt-2 flex-1 overflow-y-auto space-y-1 pr-1">
-                        {productosEnRiesgo.slice(0, 5).map(p => (
-                          <div key={p.id} className="flex justify-between items-center text-[10px] leading-tight">
-                            <span className="truncate flex-1 text-red-800 font-medium">{p.nombre}</span>
-                            <span className="font-bold text-red-600 ml-1 text-[9px] whitespace-nowrap">
-                              {p.stock}{p.stock === 1 ? 'ud' : 'uds'}
-                            </span>
-                          </div>
-                        ))}
-                        {productosEnRiesgo.length > 5 && (
-                          <p className="text-red-600 text-[9px] font-semibold text-center mt-1">
-                            +{productosEnRiesgo.length - 5} más...
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex-1 flex items-center justify-center">
-                        <p className="text-xs text-green-700 font-medium">Todo en orden</p>
-                      </div>
-                    )}
-                  </button>
                 </div>
               </div>
 
-              {/* DESKTOP - Grid estático */}
               <div className="hidden sm:grid sm:grid-cols-3 gap-4">
                 <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                   <p className="text-lg text-gray-600 font-medium">Mis Productos</p>
@@ -473,7 +441,6 @@ function Dashboard({ onLogout }) {
               </div>
             </div>
 
-            {/* BARRA DE BÚSQUEDA Y BOTÓN AGREGAR */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div className="relative flex-1 max-w-md w-full group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-600 transition-colors duration-200" />
@@ -495,7 +462,6 @@ function Dashboard({ onLogout }) {
               </button>
             </div>
 
-            {/* VISTA MOBILE: Cards con IMAGEN OPTIMIZADA */}
             <div className="product-cards-mobile">
               {loading ? <div className="loading-state">Cargando productos...</div> : 
                 filteredProductos.length === 0 ? (
@@ -503,7 +469,6 @@ function Dashboard({ onLogout }) {
                 ) : (
                   productosMostrados.map((p) => (
                     <div key={p.id} className="product-card">
-                      {/* ✅ IMAGEN OPTIMIZADA PARA THUMBNAIL (600px) */}
                       {p.imagen_url ? (
                         <div 
                           onClick={() => setSelectedImage(p.imagen_url)}
@@ -511,7 +476,7 @@ function Dashboard({ onLogout }) {
                           style={{ marginBottom: '12px', borderRadius: '12px', overflow: 'hidden', background: '#f3f4f6' }}
                         >
                           <img 
-                            src={optimizeImage(p.imagen_url, 600)} 
+                            src={p.imagen_url} 
                             alt={p.nombre} 
                             style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }} 
                             onError={(e) => { e.target.style.display = 'none'; }} 
@@ -532,7 +497,17 @@ function Dashboard({ onLogout }) {
                           <h3 className="product-card-title">{p.nombre}</h3>
                           <p className="product-card-meta">{p.categoria || 'Sin categoría'}</p>
                         </div>
-                        <span className={`stock-badge ${p.stock <= 5 ? 'stock-low' : 'stock-ok'}`}>Stock: {p.stock}</span>
+                        {/* ✅ NUEVO: botón web + badge stock */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleWebToggle(p)}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition ${getWebButtonStyle(p.web_estado || 'no_enviado').cls}`}
+                            title={getWebButtonStyle(p.web_estado || 'no_enviado').title}
+                          >
+                            <Globe className="w-4 h-4" />
+                          </button>
+                          <span className={`stock-badge ${p.stock <= 5 ? 'stock-low' : 'stock-ok'}`}>Stock: {p.stock}</span>
+                        </div>
                       </div>
                       <div className="product-card-details">
                         <div className="detail-item">Talle: <span>{p.talle || '-'}</span></div>
@@ -558,7 +533,6 @@ function Dashboard({ onLogout }) {
               }
             </div>
 
-            {/* VISTA DESKTOP: Tabla con IMAGEN OPTIMIZADA */}
             <div className="product-table-desktop bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
               {loading ? <div className="loading-state">Cargando productos...</div> : (
                 <div className="overflow-x-auto">
@@ -575,10 +549,9 @@ function Dashboard({ onLogout }) {
                       {productosMostrados.map((p) => (
                         <tr key={p.id} className="hover:bg-blue-50 transition">
                           <td className="px-6 py-4">
-                            {/* ✅ IMAGEN OPTIMIZADA PARA THUMBNAIL PEQUEÑO (150px) */}
                             {p.imagen_url ? (
                               <img 
-                                src={optimizeImage(p.imagen_url, 150)} 
+                                src={p.imagen_url} 
                                 alt={p.nombre} 
                                 style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer' }} 
                                 onClick={() => setSelectedImage(p.imagen_url)}
@@ -596,7 +569,17 @@ function Dashboard({ onLogout }) {
                           <td className="px-6 py-4 text-gray-700 text-lg">{p.color || '-'}</td>
                           <td className="px-6 py-4 text-gray-900 font-bold text-lg">${Number(p.precio).toFixed(2)}</td>
                           <td className="px-6 py-4">
-                            <span className={`stock-badge ${p.stock <= 5 ? 'stock-low' : 'stock-ok'}`}>{p.stock}</span>
+                            {/* ✅ NUEVO: botón web + badge stock */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleWebToggle(p)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition ${getWebButtonStyle(p.web_estado || 'no_enviado').cls}`}
+                                title={getWebButtonStyle(p.web_estado || 'no_enviado').title}
+                              >
+                                <Globe className="w-4 h-4" />
+                              </button>
+                              <span className={`stock-badge ${p.stock <= 5 ? 'stock-low' : 'stock-ok'}`}>{p.stock}</span>
+                            </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2 justify-end">
@@ -622,7 +605,6 @@ function Dashboard({ onLogout }) {
               )}
             </div>
 
-            {/* PAGINACIÓN "VER MÁS" */}
             {!loading && filteredProductos.length > 0 && (
               <div className="mt-4 mb-6 px-4 py-4 bg-white rounded-xl shadow-sm border border-gray-200">
                 <p className="text-center text-sm text-gray-600 mb-3">
@@ -685,6 +667,8 @@ function Dashboard({ onLogout }) {
           <ClientesView />
         ) : currentView === 'metrics' ? (
           <MetricsView onNavigate={setCurrentView} />
+        ) : currentView === 'gastos' ? (
+          <GastosView />
         ) : null}
       </main>
 
@@ -721,19 +705,31 @@ function Dashboard({ onLogout }) {
               className="w-full text-left px-5 py-4 text-gray-700 hover:bg-blue-50 flex items-center gap-3 border-b border-gray-100"
             >
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
               <div>
                 <p className="font-semibold">Clientes</p>
                 <p className="text-xs text-gray-500">Deudas y pagos</p>
               </div>
             </button>
+
+<button 
+  onClick={() => { setCurrentView('gastos'); setShowMoreMenu(false); }}
+  className="w-full text-left px-5 py-4 text-gray-700 hover:bg-blue-50 flex items-center gap-3 border-b border-gray-100"
+>
+  <DollarSign className="w-6 h-6 text-red-600" />
+  <div>
+    <p className="font-semibold">Gastos</p>
+    <p className="text-xs text-gray-500">Egresos del local</p>
+  </div>
+</button>
+
             <button 
               onClick={() => { setCurrentView('metrics'); setShowMoreMenu(false); }}
               className="w-full text-left px-5 py-4 text-gray-700 hover:bg-blue-50 flex items-center gap-3"
             >
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a-2 2 0 01-2 2h-2a-2 2 0 01-2-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <div>
                 <p className="font-semibold">Métricas</p>
@@ -747,7 +743,7 @@ function Dashboard({ onLogout }) {
       {showForm && <ProductForm onClose={() => setShowForm(false)} editId={editId} onSave={fetchProductos} />}
       {showTutorial && <Tutorial onComplete={() => setShowTutorial(false)} />}
 
-      {/* BOTÓN SCROLL TO TOP */}
+      {/* ✅ NUEVO: BOTÓN SCROLL TO TOP */}
       {showScrollTop && (
         <button
           onClick={scrollToTop}
@@ -765,7 +761,6 @@ function Dashboard({ onLogout }) {
         </button>
       )}
 
-      {/* LIGHTBOX DE IMAGEN OPTIMIZADO */}
       {selectedImage && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-90 z-[100] flex items-center justify-center p-4 sm:hidden"
@@ -780,9 +775,8 @@ function Dashboard({ onLogout }) {
             </svg>
           </button>
 
-          {/* ✅ IMAGEN OPTIMIZADA PARA LIGHTBOX (1200px) */}
           <img 
-            src={optimizeImage(selectedImage, 1200)} 
+            src={selectedImage} 
             alt="Producto" 
             className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-300"
             onClick={(e) => e.stopPropagation()}
@@ -794,7 +788,7 @@ function Dashboard({ onLogout }) {
         </div>
       )}
     </div>
-  )   
+  )
 }
 
 export default Dashboard
